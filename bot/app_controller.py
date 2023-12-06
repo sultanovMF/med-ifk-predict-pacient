@@ -1,198 +1,67 @@
 from __future__ import annotations
 
-import asyncio
-import threading
-import time
-from abc import ABC, abstractmethod
-from collections import namedtuple
-from typing import cast
-
-import zmq
-from telebot.async_telebot import AsyncTeleBot
-from telebot.types import (CallbackQuery, InlineKeyboardButton,
-                           InlineKeyboardMarkup, KeyboardButton, Message,
-                           ReplyKeyboardMarkup)
-
-from mvc import BaseController, Event, EventBus
-
 from .app_model import AppModel
 from .events import (NewUserFormEvent, ReinitializeHandlersEvent,
                      SaveUserFormEvent, UpdateUserFormEvent, UserNotifyEvent)
-
-ViewElements = namedtuple("ViewElements", "handler view_data")
-UserData = namedtuple("UserData", "chat_id field value")
-HandlerData = namedtuple("HandlerData", "current_handler current_view_data chat_id")
-
-
-def create_markup(*args):
-    markup = ReplyKeyboardMarkup(resize_keyboard=True)
-    for arg in args:
-        markup.add(KeyboardButton(arg))
-
-    return markup
-
-
-class Handler(ABC):
-    @abstractmethod
-    def set_next(self, handler: Handler) -> Handler:
-        pass
-
-    @abstractmethod
-    async def handle(self, chat_id: int):
-        pass
-
-
-class AbstractHandler(Handler):
-    _next_handler: Handler = None
-
-    def __init__(self, event_bus: EventBus, bot: AsyncTeleBot, *args, **kwargs):
-        self._event_bus = event_bus
-        self._bot = bot
-
-    def set_next(self, handler: Handler) -> Handler:
-        self._next_handler = handler
-        return handler
-
-    @abstractmethod
-    async def handle(self, chat_id: int):
-        pass
-
-    def __call__(self, *args, **kwargs):
-        return self
-
-
-class AbstractInfoHandler(AbstractHandler, ABC):
-    pass
-
-
-class AbstractRequestHandler(AbstractHandler, ABC):
-    def __init__(self, event_bus: EventBus, *args, **kwargs):
-        super().__init__(event_bus, *args, **kwargs)
-        self._commit = asyncio.Event()
-        self._data = None
-
-    @abstractmethod
-    async def process_response(self, data: str):
-        # метод для валидации данных
-        self._data = data
-        self._commit.set()
-
-
-class AbstractRequestTextHandler(AbstractRequestHandler, ABC):
-    pass
-
-
-class AbstractRequestButtonHandler(AbstractRequestHandler, ABC):
-    pass
-
-
-class WelcomeMessangeHandler(AbstractInfoHandler):
-    async def handle(self, chat_id: int):
-        await self._bot.send_message(chat_id, "Добро пожаловать!")
-        await self._bot.send_photo(
-            chat_id=chat_id, photo="https://telegram.org/img/t_logo.png"
-        )
-
-        self._event_bus.publish(NewUserFormEvent(chat_id))
-
-        return self._next_handler
-
-
-class AlcoholicFormHandler(AbstractRequestButtonHandler):
-    async def handle(self, chat_id: int):
-        markup = InlineKeyboardMarkup()
-        markup.row_width = 2
-        markup.add(
-            InlineKeyboardButton("Да", callback_data="да"),
-            InlineKeyboardButton("Нет", callback_data="нет"),
-        )
-
-        sent_message = await self._bot.send_message(
-            chat_id,
-            "Вы злоупотребялете алкоголем?",
-            reply_markup=markup,
-        )
-
-        await self._commit.wait()
-
-        await self._bot.edit_message_text(
-            text=f"На вопрос о злоупотреблении алкоголем вы ответили: {self._data}",
-            chat_id=chat_id,
-            message_id=sent_message.message_id,
-        )
-
-        self._event_bus.publish(
-            UpdateUserFormEvent(
-                UserData(
-                    chat_id=chat_id,
-                    field="is_alcoholic",
-                    value=True if self._data == "да" else False,
-                )
-            )
-        )
-
-        return self._next_handler
-
-    async def process_response(self, data: str):
-        self._data = data
-        self._commit.set()
-
-
-class DiagnosisFormHandler(AbstractRequestTextHandler):
-    async def handle(self, chat_id: int):
-        await self._bot.send_message(
-            chat_id,
-            "Чем болеете?",
-        )
-
-        await self._commit.wait()
-
-        self._event_bus.publish(
-            UpdateUserFormEvent(
-                UserData(chat_id=chat_id, field="diagnosis", value=self._data)
-            )
-        )
-
-        return self._next_handler
-
-    async def process_response(self, data: str):
-        self._data = data
-        self._commit.set()
-
-
-class EndFormActionHandler(AbstractRequestTextHandler):
-    async def handle(self, chat_id: int):
-        await self._bot.send_message(
-            chat_id,
-            "Нажмите на кнопку, чтобы начать заново.",
-            reply_markup=create_markup("Начать"),
-        )
-
-        self._event_bus.publish(SaveUserFormEvent(chat_id))
-
-        await self._commit.wait()
-
-        self._event_bus.publish(
-            ReinitializeHandlersEvent(
-                HandlerData(
-                    current_handler=self, current_view_data=None, chat_id=chat_id
-                )
-            )
-        )
-
-        return self._next_handler
-
-    async def process_response(self, data: str):
-        if data == "Начать":
-            self._data = data
-            self._commit.set()
+from typing import cast
+from .handlers import *
+import zmq
 
 
 class AppController(BaseController):
     __form_handlers = (
-        ViewElements(handler=WelcomeMessangeHandler, view_data=None),
-        ViewElements(handler=AlcoholicFormHandler, view_data=None),
-        ViewElements(handler=DiagnosisFormHandler, view_data=None),
+        # Блок вопросов: плодовые факторы риска
+        ViewElements(handler=FetalRiskFactorsHandler, view_data=None),
+        ViewElements(handler=CongenitalMalformationsHandler, view_data=None),
+        ViewElements(handler=AcuteInfectionsHandler, view_data=None),
+        ViewElements(handler=NonimmuneHydropsHandler, view_data=None),
+        ViewElements(handler=IsoimmunizationHandler, view_data=None),
+        ViewElements(handler=MaternalFetalHemorrhageHandler, view_data=None),
+        ViewElements(handler=FetoFetalTransfusionSyndromeHandler, view_data=None),
+        ViewElements(handler=FetalGrowthRestrictionHandler, view_data=None),
+        # Блок вопросов: пуповинные факторы риска
+        ViewElements(handler=UmbilicalCordRiskFactorsHandler, view_data=None),
+        ViewElements(handler=ProlapseHandler, view_data=None),
+        ViewElements(handler=UmbilicalCoilingKnotHandler, view_data=None),
+        ViewElements(handler=VelamentousInsertionHandler, view_data=None),
+        ViewElements(handler=ShortUmbilicalCordHandler, view_data=None),
+        # Блок вопросов: плацентарные факторы риска
+        ViewElements(handler=PlacentalRiskFactorsHandler, view_data=None),
+        ViewElements(handler=PlacentalAbruptionHandler, view_data=None),
+        ViewElements(handler=PlacentalPreviaHandler, view_data=None),
+        ViewElements(handler=VascularCordProlapseHandler, view_data=None),
+        ViewElements(handler=PlacentalInsufficiencyHandler, view_data=None),
+        # Блок вопросов: факторы, связанные с патологией амниотической жидкости
+        ViewElements(handler=FactorsAmnioticFluidPathologyHandler, view_data=None),
+        ViewElements(handler=ChorioamnionitisHandler, view_data=None),
+        ViewElements(handler=OligohydramniosHandler, view_data=None),
+        ViewElements(handler=PolyhydramniosHandler, view_data=None),
+        # Блок вопросов: материнские факторы риска
+        ViewElements(handler=MaternalRiskFactorsHandler, view_data=None),
+        ViewElements(handler=AsphyxiaHandler, view_data=None),
+        ViewElements(handler=BirthTraumaHandler, view_data=None),
+        ViewElements(handler=ExternalInjuryHandler, view_data=None),
+        ViewElements(handler=IatrogenicInjuryHandler, view_data=None),
+        ViewElements(handler=UterineRuptureHandler, view_data=None),
+        ViewElements(handler=UterineMalformationsHandler, view_data=None),
+        ViewElements(handler=SubstanceAbuseHandler, view_data=None),
+        ViewElements(handler=TobaccoConsumptionHandler, view_data=None),
+        ViewElements(handler=AlcoholConsumptionHandler, view_data=None),
+        # Блок вопросв: текстовые
+        ViewElements(handler=PreTextQuestionsHandler, view_data=None),
+        ViewElements(handler=InfectiousAndParasiticHandler, view_data=None),
+        ViewElements(handler=BloodAndImmuneSystemHandler, view_data=None),
+        ViewElements(handler=EndocrineSystemHandler, view_data=None),
+        ViewElements(handler=NervousSystemHandler, view_data=None),
+        ViewElements(handler=CirculatorySystemHandler, view_data=None),
+        ViewElements(handler=RespiratorySystemHandler, view_data=None),
+        ViewElements(handler=DigestiveSystemHandler, view_data=None),
+        ViewElements(handler=MusculoskeletalSystemHandler, view_data=None),
+        ViewElements(handler=GenitourinarySystemHandler, view_data=None),
+        ViewElements(handler=CongenitalAnomaliesHandler,view_data= None),
+        ViewElements(handler=ExternalCausesHandler, view_data=None),
+        # Концовка
+        ViewElements(handler=EndCommentHandler, view_data=None),
         ViewElements(handler=EndFormActionHandler, view_data=None),
     )
 
@@ -230,6 +99,8 @@ class AppController(BaseController):
         @self.__bot.message_handler(commands=["start"])
         async def start_command(message: Message):
             self.__user_handler[message.chat.id] = self.__add_start_handlers(
+                ViewElements(handler=PersonalDataAgreeMessageHandler, view_data=None),
+                ViewElements(handler=StartMessageHandler, view_data=None),
                 *self.__form_handlers
             )
 
@@ -238,7 +109,7 @@ class AppController(BaseController):
         @self.__bot.message_handler(func=lambda message: True)
         async def receive_message(message: Message):
             if isinstance(
-                self.__user_handler[message.chat.id], AbstractRequestTextHandler
+                    self.__user_handler[message.chat.id], AbstractRequestTextHandler
             ):
                 await self.__user_handler[message.chat.id].process_response(
                     message.text
@@ -247,7 +118,7 @@ class AppController(BaseController):
         @self.__bot.callback_query_handler(func=lambda call: True)
         async def button_processing(call: CallbackQuery):
             if isinstance(
-                self.__user_handler[call.message.chat.id], AbstractRequestButtonHandler
+                    self.__user_handler[call.message.chat.id], AbstractRequestButtonHandler
             ):
                 await self.__user_handler[call.message.chat.id].process_response(
                     call.data

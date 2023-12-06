@@ -4,4 +4,7 @@
     <option name="sdkName" value="Poetry (med-ifk-predict)" />
   </component>
   <component name="ProjectRootManager" version="2" project-jdk-name="Poetry (med-ifk-predict)" project-jdk-type="Python SDK" />
+  <component name="PythonCompatibilityInspectionAdvertiser">
+    <option name="version" value="3" />
+  </component>
 </project>
