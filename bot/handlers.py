@@ -10,14 +10,14 @@ from telebot.types import (CallbackQuery, InlineKeyboardButton,
                            InlineKeyboardMarkup, KeyboardButton, Message,
                            ReplyKeyboardMarkup)
 from .events import (NewUserFormEvent, ReinitializeHandlersEvent,
-                     SaveUserFormEvent, UpdateUserFormEvent, UserNotifyEvent)
+                     SaveUserFormEvent, UpdateUserFormEvent, UserNotifyEvent, UpdateMarkEvent)
 
 from mvc import BaseController, Event, EventBus
 
 ViewElements = namedtuple("ViewElements", "handler view_data")
 UserData = namedtuple("UserData", "chat_id field value")
 HandlerData = namedtuple("HandlerData", "current_handler current_view_data chat_id")
-
+MarkData = namedtuple("MarkData", "chat_id mark")
 
 
 def create_markup(*args):
@@ -131,6 +131,24 @@ class StartMessageHandler(AbstractRequestButtonHandler):
         self._data = data
         self._commit.set()
 
+
+class RegisterNameHandler(AbstractRequestTextHandler):
+    async def handle(self, chat_id: int):
+        await self._bot.send_message(
+            chat_id,
+            "Введите фамилию, имя и отчество: ",
+        )
+
+        await self._commit.wait()
+
+        self._event_bus.publish(UpdateUserFormEvent(UserData(chat_id=chat_id, field="name", value=self._data)))
+
+        return self._next_handler
+
+    async def process_response(self, data: str):
+        self._data = data
+        self._commit.set()
+
 class FetalRiskFactorsHandler(AbstractInfoHandler):
     async def handle(self, chat_id: int):
         await self._bot.send_message(chat_id, "*🔎 Блок вопросов: плодовые факторы риска.*", parse_mode='Markdown')
@@ -170,6 +188,13 @@ class CongenitalMalformationsHandler(AbstractRequestButtonHandler):
                 )
             )
         )
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=2)
+                )
+            )
+
 
         return self._next_handler
 
@@ -210,6 +235,13 @@ class AcuteInfectionsHandler(AbstractRequestButtonHandler):
                 )
             )
         )
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=2)
+                )
+            )
+
 
         return self._next_handler
 
@@ -251,6 +283,14 @@ class NonimmuneHydropsHandler(AbstractRequestButtonHandler):
             )
         )
 
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=1)
+                )
+            )
+
+
         return self._next_handler
 
     async def process_response(self, data: str):
@@ -290,6 +330,13 @@ class IsoimmunizationHandler(AbstractRequestButtonHandler):
                 )
             )
         )
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=1)
+                )
+            )
+
 
         return self._next_handler
 
@@ -330,6 +377,13 @@ class MaternalFetalHemorrhageHandler(AbstractRequestButtonHandler):
                 )
             )
         )
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=2)
+                )
+            )
+
 
         return self._next_handler
 
@@ -370,6 +424,13 @@ class FetoFetalTransfusionSyndromeHandler(AbstractRequestButtonHandler):
                 )
             )
         )
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=1)
+                )
+            )
+
 
         return self._next_handler
 
@@ -410,6 +471,13 @@ class FetalGrowthRestrictionHandler(AbstractRequestButtonHandler):
                 )
             )
         )
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=1)
+                )
+            )
+
 
         return self._next_handler
 
@@ -457,6 +525,14 @@ class ProlapseHandler(AbstractRequestButtonHandler):
             )
         )
 
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=1)
+                )
+            )
+
+
         return self._next_handler
 
     async def process_response(self, data: str):
@@ -495,6 +571,12 @@ class UmbilicalCoilingKnotHandler(AbstractRequestButtonHandler):
                 )
             )
         )
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=1)
+                )
+            )
 
         return self._next_handler
 
@@ -534,6 +616,12 @@ class VelamentousInsertionHandler(AbstractRequestButtonHandler):
                 )
             )
         )
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=1)
+                )
+            )
 
         return self._next_handler
 
@@ -574,6 +662,12 @@ class ShortUmbilicalCordHandler(AbstractRequestButtonHandler):
                 )
             )
         )
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=1)
+                )
+            )
 
         return self._next_handler
 
@@ -622,6 +716,12 @@ class PlacentalAbruptionHandler(AbstractRequestButtonHandler):
                 )
             )
         )
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=1)
+                )
+            )
 
         return self._next_handler
 
@@ -662,6 +762,12 @@ class PlacentalPreviaHandler(AbstractRequestButtonHandler):
                 )
             )
         )
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=1)
+                )
+            )
 
         return self._next_handler
 
@@ -701,6 +807,12 @@ class VascularCordProlapseHandler(AbstractRequestButtonHandler):
                 )
             )
         )
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=1)
+                )
+            )
 
         return self._next_handler
 
@@ -740,6 +852,12 @@ class PlacentalInsufficiencyHandler(AbstractRequestButtonHandler):
                 )
             )
         )
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=1)
+                )
+            )
 
         return self._next_handler
 
@@ -788,6 +906,12 @@ class ChorioamnionitisHandler(AbstractRequestButtonHandler):
                 )
             )
         )
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=2)
+                )
+            )
 
         return self._next_handler
 
@@ -827,7 +951,12 @@ class OligohydramniosHandler(AbstractRequestButtonHandler):
                 )
             )
         )
-
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=2)
+                )
+            )
         return self._next_handler
 
     async def process_response(self, data: str):
@@ -866,7 +995,12 @@ class PolyhydramniosHandler(AbstractRequestButtonHandler):
                 )
             )
         )
-
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=2)
+                )
+            )
         return self._next_handler
 
     async def process_response(self, data: str):
@@ -913,7 +1047,12 @@ class AsphyxiaHandler(AbstractRequestButtonHandler):
                 )
             )
         )
-
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=2)
+                )
+            )
         return self._next_handler
 
     async def process_response(self, data: str):
@@ -953,7 +1092,12 @@ class BirthTraumaHandler(AbstractRequestButtonHandler):
                 )
             )
         )
-
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=2)
+                )
+            )
         return self._next_handler
 
     async def process_response(self, data: str):
@@ -994,6 +1138,12 @@ class ExternalInjuryHandler(AbstractRequestButtonHandler):
             )
         )
 
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=2)
+                )
+            )
         return self._next_handler
 
     async def process_response(self, data: str):
@@ -1033,7 +1183,12 @@ class IatrogenicInjuryHandler(AbstractRequestButtonHandler):
                 )
             )
         )
-
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=2)
+                )
+            )
         return self._next_handler
 
     async def process_response(self, data: str):
@@ -1073,7 +1228,12 @@ class UterineRuptureHandler(AbstractRequestButtonHandler):
                 )
             )
         )
-
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=2)
+                )
+            )
         return self._next_handler
 
     async def process_response(self, data: str):
@@ -1113,7 +1273,12 @@ class UterineMalformationsHandler(AbstractRequestButtonHandler):
                 )
             )
         )
-
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=1)
+                )
+            )
         return self._next_handler
 
     async def process_response(self, data: str):
@@ -1153,7 +1318,12 @@ class SubstanceAbuseHandler(AbstractRequestButtonHandler):
                 )
             )
         )
-
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=1)
+                )
+            )
         return self._next_handler
 
     async def process_response(self, data: str):
@@ -1193,7 +1363,12 @@ class TobaccoConsumptionHandler(AbstractRequestButtonHandler):
                 )
             )
         )
-
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=1)
+                )
+            )
         return self._next_handler
 
     async def process_response(self, data: str):
@@ -1232,7 +1407,12 @@ class AlcoholConsumptionHandler(AbstractRequestButtonHandler):
                 )
             )
         )
-
+        if self._data == "да":
+            self._event_bus.publish(
+                UpdateMarkEvent(
+                    MarkData(chat_id=chat_id, mark=1)
+                )
+            )
         return self._next_handler
 
     async def process_response(self, data: str):
@@ -1497,7 +1677,7 @@ class EndCommentHandler(AbstractRequestTextHandler):
 
         self._event_bus.publish(
             UpdateUserFormEvent(
-                UserData(chat_id=chat_id, field="comment", value=self._data)
+                UserData(chat_id=chat_id, field="patient_comment", value=self._data)
             )
         )
 

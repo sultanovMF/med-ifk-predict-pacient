@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import asyncio
+
 from .app_model import AppModel
 from .events import (NewUserFormEvent, ReinitializeHandlersEvent,
-                     SaveUserFormEvent, UpdateUserFormEvent, UserNotifyEvent)
+                     SaveUserFormEvent, UpdateUserFormEvent, UserNotifyEvent, UpdateMarkEvent)
 from typing import cast
 from .handlers import *
 import zmq
-
+import zmq.asyncio
 
 class AppController(BaseController):
     __form_handlers = (
+        ViewElements(handler=RegisterNameHandler, view_data=None),
         # Блок вопросов: плодовые факторы риска
         ViewElements(handler=FetalRiskFactorsHandler, view_data=None),
         ViewElements(handler=CongenitalMalformationsHandler, view_data=None),
@@ -74,10 +77,12 @@ class AppController(BaseController):
 
         self.__app_model = app_model
 
-        self.__zmq_context = zmq.Context()
-        self.__zmq_socket = self.__zmq_context.socket(zmq.REP)
-        self.__zmq_socket.bind("tcp://*:5555")
-        threading.Thread(target=self.__zmq_listening, daemon=True).start()
+        self.__zmq_context = zmq.asyncio.Context()
+        self.__zmq_socket = self.__zmq_context.socket(zmq.SUB)
+        self.__zmq_socket.connect("tcp://127.0.0.1:5555")
+        self.__zmq_socket.setsockopt_string(zmq.SUBSCRIBE, "")
+
+        #threading.Thread(target=self.__zmq_listening, daemon=True).start()
 
         self._event_handlers[cast(Event, UserNotifyEvent)] = self.__notify_event
         self._event_handlers[cast(Event, UpdateUserFormEvent)] = self.__update_user_form
@@ -86,7 +91,7 @@ class AppController(BaseController):
         ] = self.__reinitialize_handler
         self._event_handlers[cast(Event, SaveUserFormEvent)] = self.__save_user_form
         self._event_handlers[cast(Event, NewUserFormEvent)] = self.__new_user_form
-
+        self._event_handlers[cast(Event, UpdateMarkEvent)] = self.__update_mark
         self.__user_handler = {}
         self.__user_forms = {}
 
@@ -127,6 +132,13 @@ class AppController(BaseController):
     def __new_user_form(self, e: Event):
         chat_id = e.data
         self.__user_forms[chat_id] = {"chat_id": chat_id}
+        self.__user_forms[chat_id]["mark"] = 0
+
+    def __update_mark(self, e: Event):
+        chat_id, mark = e.data
+        self.__user_forms[chat_id]["mark"] += mark
+        self.__user_forms[chat_id]["doctor_comment"] = ""
+        self.__user_forms[chat_id]["checked"] = False
 
     def __save_user_form(self, e: Event):
         chat_id = e.data
@@ -134,6 +146,13 @@ class AppController(BaseController):
 
     def __reinitialize_handler(self, e: Event):
         current_handler, current_view_data, chat_id = e.data
+
+        self.__user_forms[chat_id] = {}
+        self.__user_forms[chat_id] = {"chat_id": chat_id}
+        self.__user_forms[chat_id]["mark"] = 0
+        self.__user_forms[chat_id]["doctor_comment"] = ""
+        self.__user_forms[chat_id]["checked"] = False
+
         self.__user_handler[chat_id] = self.__add_start_handlers(
             ViewElements(handler=current_handler, view_data=current_view_data),
             *self.__form_handlers,
@@ -149,20 +168,47 @@ class AppController(BaseController):
         return result_handler
 
     def __notify_event(self, e: Event):
-        pass
+        chat_id, message = e.data
+        self.__bot.send_message(chat_id, message, parse_mode="Markdown")
 
-    def __zmq_listening(self):
+    async def __zmq_listening(self):
         while True:
-            message = self.__zmq_socket.recv()
-            print("Received request: %s" % message)
+            patient_name = await self.__zmq_socket.recv_string()
+            patient_form = self.__app_model.get_patient(patient_name)
 
-            time.sleep(10)
+            chat_id = patient_form["chat_id"]
 
-            self.__zmq_socket.send(b"World")
+            message = f"""
+Дорогая {patient_name},
+
+После тщательного анализа результатов Вашего обследования, я хочу предоставить вам предварительный диагноз. Ваше здоровье - наш приоритет, и мы готовы вас поддержать.
+
+Ваш балл по результатам тестирования составил: {patient_form["mark"]}.
+
+Врач оставил комментарий:
+
+{patient_form["doctor_comment"]}
+
+Пожалуйста, помните, что профессиональная медицинская помощь важна для вашего восстановления, и мы готовы оказать вам всю необходимую поддержку.
+
+Если у вас возникнут дополнительные вопросы или вам потребуется дополнительная информация, не стесняйтесь обращаться.
+
+С наилучшими пожеланиями,
+Ваш лечащий врач {patient_form["doctor_name"]}.
+"""
+
+            await self.__bot.send_message(chat_id, message, parse_mode="Markdown")
+
 
     def __update_user_form(self, e: Event):
         chat_id, field, value = e.data
         self.__user_forms[chat_id][field] = value
 
+
     def run(self):
-        asyncio.run(self.__bot.polling())
+        async def task():
+            # Run both tasks concurrently
+            await asyncio.gather(self.__bot.infinity_polling(), self.__zmq_listening())
+
+        asyncio.run(task())
+

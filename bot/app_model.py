@@ -10,5 +10,14 @@ class AppModel:
     def add_to_db(self, form):
         self.__patient_forms.insert_one(form)
 
+    def get_patient(self, name):
+        criteria = {
+            'name': name,
+        }
+
+        best_match = self.__patient_forms.find_one(criteria)
+
+        return best_match
+
     def notify_doctor(self):
         pass

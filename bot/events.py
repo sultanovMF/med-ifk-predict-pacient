@@ -26,3 +26,9 @@ class SaveUserFormEvent(Event):
 @dataclass
 class NewUserFormEvent(Event):
     pass
+
+
+@dataclass
+class UpdateMarkEvent(Event):
+    pass
+
